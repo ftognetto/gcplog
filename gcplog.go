@@ -12,12 +12,12 @@ import (
 
 type LogEntry struct {
 	log     interface{}
-	trace   *string
+	trace   string
 	request *logging.HTTPRequest
 }
 type ErrorEntry struct {
 	err        error
-	trace      *string
+	trace      string
 	stackTrace []byte
 	request    *logging.HTTPRequest
 }
@@ -120,8 +120,8 @@ func (g *gcpLog) Log(log LogEntry) {
 	if g.resource != nil {
 		entry.Resource = g.resource
 	}
-	if log.trace != nil {
-		entry.Trace = *log.trace
+	if log.trace != "" {
+		entry.Trace = log.trace
 	}
 	if log.request != nil {
 		entry.HTTPRequest = log.request
@@ -137,8 +137,8 @@ func (g *gcpLog) Warn(err ErrorEntry) {
 	if g.resource != nil {
 		loggingEntry.Resource = g.resource
 	}
-	if err.trace != nil {
-		loggingEntry.Trace = *err.trace
+	if err.trace != "" {
+		loggingEntry.Trace = err.trace
 	}
 	if err.request != nil {
 		loggingEntry.HTTPRequest = err.request
@@ -164,8 +164,8 @@ func (g *gcpLog) Error(err ErrorEntry) {
 	if g.resource != nil {
 		entry.Resource = g.resource
 	}
-	if err.trace != nil {
-		entry.Trace = *err.trace
+	if err.trace != "" {
+		entry.Trace = err.trace
 	}
 	if err.request != nil {
 		entry.HTTPRequest = err.request

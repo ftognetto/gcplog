@@ -64,7 +64,7 @@ func Middleware(projectId string, serviceName string, resource string) func(http
 			if status < 400 {
 				gcplog.Log(LogEntry{
 					log:     log,
-					trace:   &trace,
+					trace:   trace,
 					request: &request,
 				})
 				return
@@ -75,13 +75,13 @@ func Middleware(projectId string, serviceName string, resource string) func(http
 			if status >= 400 && status < 500 {
 				gcplog.Warn(ErrorEntry{
 					err:     err,
-					trace:   &trace,
+					trace:   trace,
 					request: &request,
 				})
 			} else {
 				gcplog.Error(ErrorEntry{
 					err:     err,
-					trace:   &trace,
+					trace:   trace,
 					request: &request,
 				})
 			}
