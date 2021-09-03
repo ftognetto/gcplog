@@ -1,6 +1,7 @@
 package gcplog
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"runtime/debug"
@@ -14,8 +15,9 @@ import (
 // written HTTP status code to be captured for logging.
 type responseWriter struct {
 	http.ResponseWriter
-	status int
-	size   int
+	status      int
+	size        int
+	wroteHeader bool
 }
 
 func wrapResponseWriter(w http.ResponseWriter) *responseWriter {
@@ -28,6 +30,21 @@ func (rw *responseWriter) Status() int {
 
 func (rw *responseWriter) Size() int {
 	return rw.size
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	if rw.wroteHeader {
+		return
+	}
+	rw.status = code
+
+	var buf bytes.Buffer
+	rw.Header().Write(&buf)
+	rw.size += buf.Len()
+
+	rw.ResponseWriter.WriteHeader(code)
+	rw.wroteHeader = true
+
 }
 
 func Middleware(projectId string, serviceName string, resource string) func(http.Handler) http.Handler {
