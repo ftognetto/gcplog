@@ -22,7 +22,7 @@ type responseWriter struct {
 }
 
 func wrapResponseWriter(w http.ResponseWriter) *responseWriter {
-	return &responseWriter{ResponseWriter: w}
+	return &responseWriter{ResponseWriter: w, body: &bytes.Buffer{}}
 }
 
 func (rw *responseWriter) Status() int {
