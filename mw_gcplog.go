@@ -17,6 +17,7 @@ type responseWriter struct {
 	http.ResponseWriter
 	status      int
 	size        int
+	body        *bytes.Buffer
 	wroteHeader bool
 }
 
@@ -30,6 +31,11 @@ func (rw *responseWriter) Status() int {
 
 func (rw *responseWriter) Size() int {
 	return rw.size
+}
+
+func (rw *responseWriter) Write(b []byte) (int, error) {
+	rw.body.Write(b)
+	return rw.ResponseWriter.Write(b)
 }
 
 func (rw *responseWriter) WriteHeader(code int) {
@@ -88,7 +94,7 @@ func Middleware(projectId string, serviceName string, resource string) func(http
 			}
 
 			var err error
-
+			fmt.Println(wrapped.body.String())
 			if status >= 400 && status < 500 {
 				gcplog.Warn(ErrorEntry{
 					err:     err,
