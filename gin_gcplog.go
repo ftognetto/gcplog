@@ -9,12 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Gin(projectId string, serviceName string, resource string) gin.HandlerFunc {
-	Init(projectId, serviceName)
-	return func(c *gin.Context) {
+func Gin(gcplog *GcpLog) gin.HandlerFunc {
 
-		gcplog := NewGcpLog(resource)
-		defer gcplog.Close()
+	return func(c *gin.Context) {
 
 		// before request
 		// log the body maybe..
@@ -40,7 +37,7 @@ func Gin(projectId string, serviceName string, resource string) gin.HandlerFunc 
 			traceHeader := c.Request.Header.Get("X-Cloud-Trace-Context")
 			traceParts := strings.Split(traceHeader, "/")
 			if len(traceParts) > 0 && len(traceParts[0]) > 0 {
-				trace = fmt.Sprintf("projects/%s/traces/%s", projectId, traceParts[0])
+				trace = fmt.Sprintf("projects/%s/traces/%s", gcplog.projectId, traceParts[0])
 			}
 
 			if status < 400 {

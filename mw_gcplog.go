@@ -53,12 +53,9 @@ func (rw *responseWriter) WriteHeader(code int) {
 
 }
 
-func Middleware(projectId string, serviceName string, resource string) func(http.Handler) http.Handler {
+func Middleware(gcplog *GcpLog) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
-
-			Init(projectId, serviceName)
-			gcplog := NewGcpLog(resource)
 
 			defer func() {
 
@@ -80,9 +77,12 @@ func Middleware(projectId string, serviceName string, resource string) func(http
 			// after request
 			status := wrapped.status
 			log := r.Method + " " + r.URL.Path
+			if r.Header.Get("X-Request-ID") != "" {
+				log = "[" + r.Header.Get("X-Request-ID") + "] " + log
+			}
 
 			request := parseRequest(*wrapped, r, start)
-			trace := parseTrace(r, projectId)
+			trace := parseTrace(r, gcplog.projectId)
 
 			if status < 400 {
 				gcplog.Log(LogEntry{

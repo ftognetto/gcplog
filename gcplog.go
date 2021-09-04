@@ -22,14 +22,14 @@ type ErrorEntry struct {
 	request    *logging.HTTPRequest
 }
 
-type GcpLog interface {
-	Log(log LogEntry)
-	Warn(err ErrorEntry)
-	Error(err ErrorEntry)
-	Close()
-}
+// type GcpLog interface {
+// 	Log(log LogEntry)
+// 	Warn(err ErrorEntry)
+// 	Error(err ErrorEntry)
+// 	Close()
+// }
 
-type gcpLog struct {
+type GcpLog struct {
 	projectId     string
 	serviceName   string
 	loggingClient *logging.Client
@@ -38,34 +38,25 @@ type gcpLog struct {
 	resource      *monitoredres.MonitoredResource
 }
 
-var _projectId string
-var _serviceName string
-var _resource string
+func NewGcpLog(projectId string, serviceName string, resource string) GcpLog {
 
-func Init(projectId string, serviceName string) {
-	_projectId = projectId
-	_serviceName = serviceName
-}
-
-func NewGcpLog(resource string) GcpLog {
-
-	if _projectId == "" || _serviceName == "" {
-		panic("Gcp log not correctly initialized. Call Init before")
+	if projectId == "" || serviceName == "" {
+		panic("Gcp log not correctly initialized.")
 	}
 
 	ctx := context.Background()
 
 	// Creates a Logging client.
-	loggingClient, err := logging.NewClient(ctx, _projectId)
+	loggingClient, err := logging.NewClient(ctx, projectId)
 	if err != nil {
 		log.Fatalf("Failed to create logging client: %v", err)
 	}
 	// Selects the log to write to.
-	logger := loggingClient.Logger(_serviceName)
+	logger := loggingClient.Logger(serviceName)
 
 	// Creates a Error reporting client.
-	errorClient, err := errorreporting.NewClient(ctx, _projectId, errorreporting.Config{
-		ServiceName: _serviceName,
+	errorClient, err := errorreporting.NewClient(ctx, projectId, errorreporting.Config{
+		ServiceName: serviceName,
 		OnError: func(err error) {
 			log.Printf("Could not log error: %v", err)
 		},
@@ -74,27 +65,26 @@ func NewGcpLog(resource string) GcpLog {
 		log.Fatalf("Failed to create error reporting client: %v", err)
 	}
 
-	instance := &gcpLog{
-		projectId:     _projectId,
-		serviceName:   _serviceName,
+	instance := GcpLog{
+		projectId:     projectId,
+		serviceName:   serviceName,
 		loggingClient: loggingClient,
 		errorClient:   errorClient,
 		logger:        logger,
 	}
 	if resource != "" {
-		_resource = resource
 		instance.resource = &monitoredres.MonitoredResource{
 			Type: resource,
 			Labels: map[string]string{
-				"project_id":   _projectId,
-				"service_name": _serviceName,
+				"project_id":   projectId,
+				"service_name": serviceName,
 			},
 		}
 	}
 	return instance
 }
 
-func (g *gcpLog) Close() {
+func (g *GcpLog) Close() {
 	errLogging := g.loggingClient.Close()
 	errError := g.errorClient.Close()
 	if errLogging != nil || errError != nil {
@@ -102,18 +92,10 @@ func (g *gcpLog) Close() {
 	}
 }
 
-func Log(log interface{}) {
-	instance := NewGcpLog(_resource)
-	defer instance.Close()
-	instance.Log(LogEntry{
-		log: log,
-	})
-}
-
-func (g *gcpLog) Log(log LogEntry) {
+func (g *GcpLog) Log(log LogEntry) {
+	defer g.logger.Flush()
 	entry := logging.Entry{
 		// Log anything that can be marshaled to JSON.
-
 		Payload:  log.log,
 		Severity: logging.Info,
 	}
@@ -128,7 +110,8 @@ func (g *gcpLog) Log(log LogEntry) {
 	}
 	g.logger.Log(entry)
 }
-func (g *gcpLog) Warn(err ErrorEntry) {
+func (g *GcpLog) Warn(err ErrorEntry) {
+	defer g.logger.Flush()
 	loggingEntry := logging.Entry{
 		// Log anything that can be marshaled to JSON.
 		Payload:  err.err,
@@ -146,6 +129,7 @@ func (g *gcpLog) Warn(err ErrorEntry) {
 	g.logger.Log(loggingEntry)
 
 	if os.Getenv("GO_ENV") == "production" {
+		defer g.errorClient.Flush()
 		errorEntry := errorreporting.Entry{
 			Error: err.err,
 		}
@@ -155,7 +139,8 @@ func (g *gcpLog) Warn(err ErrorEntry) {
 		g.errorClient.Report(errorEntry)
 	}
 }
-func (g *gcpLog) Error(err ErrorEntry) {
+func (g *GcpLog) Error(err ErrorEntry) {
+	defer g.logger.Flush()
 	entry := logging.Entry{
 		// Log anything that can be marshaled to JSON.
 		Payload:  err.err,
@@ -173,6 +158,7 @@ func (g *gcpLog) Error(err ErrorEntry) {
 	g.logger.Log(entry)
 
 	if os.Getenv("GO_ENV") == "production" {
+		defer g.errorClient.Flush()
 		errorEntry := errorreporting.Entry{
 			Error: err.err,
 		}
