@@ -94,7 +94,11 @@ func Middleware(projectId string, serviceName string, resource string) func(http
 			}
 
 			var err error
-			fmt.Println(wrapped.body.String())
+			if wrapped.body != nil {
+				err = fmt.Errorf(wrapped.body.String())
+			} else {
+				err = fmt.Errorf(log)
+			}
 			if status >= 400 && status < 500 {
 				gcplog.Warn(ErrorEntry{
 					err:     err,
