@@ -102,7 +102,6 @@ func middleware(
 
 				}
 			}()
-			defer gcplog.Close()
 
 			start := time.Now()
 			wrapped := wrapResponseWriter(w)
