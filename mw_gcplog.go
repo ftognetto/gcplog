@@ -13,7 +13,7 @@ import (
 
 // responseWriter is a minimal wrapper for http.ResponseWriter that allows the
 // written HTTP status code to be captured for logging.
-type responseWriter struct {
+type ResponseWriter struct {
 	http.ResponseWriter
 	status      int
 	size        int
@@ -21,24 +21,24 @@ type responseWriter struct {
 	wroteHeader bool
 }
 
-func wrapResponseWriter(w http.ResponseWriter) *responseWriter {
-	return &responseWriter{ResponseWriter: w, body: &bytes.Buffer{}}
+func wrapResponseWriter(w http.ResponseWriter) *ResponseWriter {
+	return &ResponseWriter{ResponseWriter: w, body: &bytes.Buffer{}}
 }
 
-func (rw *responseWriter) Status() int {
+func (rw *ResponseWriter) Status() int {
 	return rw.status
 }
 
-func (rw *responseWriter) Size() int {
+func (rw *ResponseWriter) Size() int {
 	return rw.size
 }
 
-func (rw *responseWriter) Write(b []byte) (int, error) {
+func (rw *ResponseWriter) Write(b []byte) (int, error) {
 	rw.body.Write(b)
 	return rw.ResponseWriter.Write(b)
 }
 
-func (rw *responseWriter) WriteHeader(code int) {
+func (rw *ResponseWriter) WriteHeader(code int) {
 	if rw.wroteHeader {
 		return
 	}
@@ -61,7 +61,7 @@ func defaultLog(r *http.Request) string {
 	return log
 }
 
-func defaultError(w responseWriter, r *http.Request) error {
+func defaultError(w ResponseWriter, r *http.Request) error {
 	var err error
 	if w.body != nil {
 		err = fmt.Errorf(w.body.String())
@@ -78,7 +78,7 @@ func Middleware(gcplog *GcpLog) func(http.Handler) http.Handler {
 func MiddlewareCustom(
 	gcplog *GcpLog,
 	logBuilder func(r *http.Request) string,
-	errorBuilder func(w responseWriter, r *http.Request) error,
+	errorBuilder func(w ResponseWriter, r *http.Request) error,
 ) func(http.Handler) http.Handler {
 	return middleware(gcplog, logBuilder, errorBuilder)
 }
@@ -86,7 +86,7 @@ func MiddlewareCustom(
 func middleware(
 	gcplog *GcpLog,
 	logBuilder func(r *http.Request) string,
-	errorBuilder func(w responseWriter, r *http.Request) error,
+	errorBuilder func(w ResponseWriter, r *http.Request) error,
 ) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
@@ -141,7 +141,7 @@ func middleware(
 	}
 }
 
-func parseRequest(w responseWriter, r *http.Request, start time.Time) logging.HTTPRequest {
+func parseRequest(w ResponseWriter, r *http.Request, start time.Time) logging.HTTPRequest {
 
 	localIp := r.Header.Get("X-Real-Ip")
 	if localIp == "" {
