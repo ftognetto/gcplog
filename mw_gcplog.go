@@ -53,7 +53,41 @@ func (rw *responseWriter) WriteHeader(code int) {
 
 }
 
+func defaultLog(r *http.Request) string {
+	log := r.Method + " " + r.URL.Path
+	if r.Header.Get("X-Request-ID") != "" {
+		log = "[" + r.Header.Get("X-Request-ID") + "] " + log
+	}
+	return log
+}
+
+func defaultError(w responseWriter, r *http.Request) error {
+	var err error
+	if w.body != nil {
+		err = fmt.Errorf(w.body.String())
+	} else {
+		err = fmt.Errorf(r.Method + " " + r.URL.Path)
+	}
+	return err
+}
+
 func Middleware(gcplog *GcpLog) func(http.Handler) http.Handler {
+	return middleware(gcplog, defaultLog, defaultError)
+}
+
+func MiddlewareCustom(
+	gcplog *GcpLog,
+	logBuilder func(r *http.Request) string,
+	errorBuilder func(w responseWriter, r *http.Request) error,
+) func(http.Handler) http.Handler {
+	return middleware(gcplog, logBuilder, errorBuilder)
+}
+
+func middleware(
+	gcplog *GcpLog,
+	logBuilder func(r *http.Request) string,
+	errorBuilder func(w responseWriter, r *http.Request) error,
+) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
 
@@ -76,11 +110,8 @@ func Middleware(gcplog *GcpLog) func(http.Handler) http.Handler {
 
 			// after request
 			status := wrapped.status
-			log := r.Method + " " + r.URL.Path
-			if r.Header.Get("X-Request-ID") != "" {
-				log = "[" + r.Header.Get("X-Request-ID") + "] " + log
-			}
-
+			log := logBuilder(r)
+			err := errorBuilder(*wrapped, r)
 			request := parseRequest(*wrapped, r, start)
 			trace := parseTrace(r, gcplog.projectId)
 
@@ -91,13 +122,6 @@ func Middleware(gcplog *GcpLog) func(http.Handler) http.Handler {
 					request: &request,
 				})
 				return
-			}
-
-			var err error
-			if wrapped.body != nil {
-				err = fmt.Errorf(wrapped.body.String())
-			} else {
-				err = fmt.Errorf(log)
 			}
 			if status >= 400 && status < 500 {
 				gcplog.Warn(ErrorEntry{
