@@ -124,15 +124,17 @@ func middleware(
 			}
 			if status >= 400 && status < 500 {
 				gcplog.Warn(ErrorEntry{
-					err:     err,
-					trace:   trace,
-					request: &request,
+					err:        err,
+					trace:      trace,
+					request:    &request,
+					stackTrace: debug.Stack(),
 				})
 			} else {
 				gcplog.Error(ErrorEntry{
-					err:     err,
-					trace:   trace,
-					request: &request,
+					err:        err,
+					trace:      trace,
+					request:    &request,
+					stackTrace: debug.Stack(),
 				})
 			}
 		}

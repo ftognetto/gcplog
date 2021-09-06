@@ -136,6 +136,12 @@ func (g *GcpLog) Warn(err ErrorEntry) {
 		if err.request != nil {
 			errorEntry.Req = err.request.Request
 		}
+		if err.stackTrace != nil {
+			errorEntry.Stack = err.stackTrace
+		}
+		if err.request != nil {
+			errorEntry.Req = err.request.Request
+		}
 		g.errorClient.Report(errorEntry)
 	}
 }
