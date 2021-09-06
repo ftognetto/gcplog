@@ -11,9 +11,9 @@ import (
 	"cloud.google.com/go/logging"
 )
 
-// responseWriter is a minimal wrapper for http.ResponseWriter that allows the
+// responseWriter is a minimal wrapper for http.responseWriter that allows the
 // written HTTP status code to be captured for logging.
-type ResponseWriter struct {
+type responseWriter struct {
 	http.ResponseWriter
 	status      int
 	size        int
@@ -21,24 +21,24 @@ type ResponseWriter struct {
 	wroteHeader bool
 }
 
-func wrapResponseWriter(w http.ResponseWriter) *ResponseWriter {
-	return &ResponseWriter{ResponseWriter: w, body: &bytes.Buffer{}}
+func wrapResponseWriter(w http.ResponseWriter) *responseWriter {
+	return &responseWriter{ResponseWriter: w, body: &bytes.Buffer{}}
 }
 
-func (rw *ResponseWriter) Status() int {
+func (rw *responseWriter) Status() int {
 	return rw.status
 }
 
-func (rw *ResponseWriter) Size() int {
+func (rw *responseWriter) Size() int {
 	return rw.size
 }
 
-func (rw *ResponseWriter) Write(b []byte) (int, error) {
+func (rw *responseWriter) Write(b []byte) (int, error) {
 	rw.body.Write(b)
 	return rw.ResponseWriter.Write(b)
 }
 
-func (rw *ResponseWriter) WriteHeader(code int) {
+func (rw *responseWriter) WriteHeader(code int) {
 	if rw.wroteHeader {
 		return
 	}
@@ -61,10 +61,10 @@ func defaultLog(r *http.Request) string {
 	return log
 }
 
-func defaultError(w ResponseWriter, r *http.Request) error {
+func defaultError(r *http.Request, status int, size int, body *bytes.Buffer) error {
 	var err error
-	if w.body != nil {
-		err = fmt.Errorf(w.body.String())
+	if body != nil {
+		err = fmt.Errorf(body.String())
 	} else {
 		err = fmt.Errorf(r.Method + " " + r.URL.Path)
 	}
@@ -78,7 +78,7 @@ func Middleware(gcplog *GcpLog) func(http.Handler) http.Handler {
 func MiddlewareCustom(
 	gcplog *GcpLog,
 	logBuilder func(r *http.Request) string,
-	errorBuilder func(w ResponseWriter, r *http.Request) error,
+	errorBuilder func(r *http.Request, status int, size int, body *bytes.Buffer) error,
 ) func(http.Handler) http.Handler {
 	return middleware(gcplog, logBuilder, errorBuilder)
 }
@@ -86,7 +86,7 @@ func MiddlewareCustom(
 func middleware(
 	gcplog *GcpLog,
 	logBuilder func(r *http.Request) string,
-	errorBuilder func(w ResponseWriter, r *http.Request) error,
+	errorBuilder func(r *http.Request, status int, size int, body *bytes.Buffer) error,
 ) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
@@ -110,7 +110,7 @@ func middleware(
 			// after request
 			status := wrapped.status
 			log := logBuilder(r)
-			err := errorBuilder(*wrapped, r)
+			err := errorBuilder(r, wrapped.status, wrapped.size, wrapped.body)
 			request := parseRequest(*wrapped, r, start)
 			trace := parseTrace(r, gcplog.projectId)
 
@@ -141,7 +141,7 @@ func middleware(
 	}
 }
 
-func parseRequest(w ResponseWriter, r *http.Request, start time.Time) logging.HTTPRequest {
+func parseRequest(w responseWriter, r *http.Request, start time.Time) logging.HTTPRequest {
 
 	localIp := r.Header.Get("X-Real-Ip")
 	if localIp == "" {
