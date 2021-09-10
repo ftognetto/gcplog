@@ -10,16 +10,24 @@ import (
 	"google.golang.org/genproto/googleapis/api/monitoredres"
 )
 
-type LogEntry struct {
-	log     interface{}
+/*
+	Structs
+*/
+
+type LogMetadata struct {
+	user    string
 	trace   string
 	request *logging.HTTPRequest
 }
+
+type LogEntry struct {
+	log  interface{}
+	meta *LogMetadata
+}
 type ErrorEntry struct {
 	err        error
-	trace      string
 	stackTrace []byte
-	request    *logging.HTTPRequest
+	meta       *LogMetadata
 }
 
 // type GcpLog interface {
@@ -28,6 +36,10 @@ type ErrorEntry struct {
 // 	Error(err ErrorEntry)
 // 	Close()
 // }
+
+/*
+	Constructor
+*/
 
 type GcpLog struct {
 	projectId     string
@@ -84,6 +96,10 @@ func NewGcpLog(projectId string, serviceName string, resource string) GcpLog {
 	return instance
 }
 
+/*
+	Public methods
+*/
+
 func (g *GcpLog) Close() {
 	errLogging := g.loggingClient.Close()
 	errError := g.errorClient.Close()
@@ -93,87 +109,65 @@ func (g *GcpLog) Close() {
 }
 
 func (g *GcpLog) Log(log LogEntry) {
-	defer g.logger.Flush()
-	entry := logging.Entry{
-		// Log anything that can be marshaled to JSON.
-		Payload:  log.log,
-		Severity: logging.Info,
-	}
-	if g.resource != nil {
-		entry.Resource = g.resource
-	}
-	if log.trace != "" {
-		entry.Trace = log.trace
-	}
-	if log.request != nil {
-		entry.HTTPRequest = log.request
-	}
-	g.logger.Log(entry)
+	g.log(log.log, log.meta, logging.Info)
 }
+
 func (g *GcpLog) Warn(err ErrorEntry) {
-	defer g.logger.Flush()
-	loggingEntry := logging.Entry{
-		// Log anything that can be marshaled to JSON.
-		Payload:  err.err,
-		Severity: logging.Warning,
-	}
-	if g.resource != nil {
-		loggingEntry.Resource = g.resource
-	}
-	if err.trace != "" {
-		loggingEntry.Trace = err.trace
-	}
-	if err.request != nil {
-		loggingEntry.HTTPRequest = err.request
-	}
-	g.logger.Log(loggingEntry)
+	g.log(err.err, err.meta, logging.Warning)
 
 	if os.Getenv("GO_ENV") == "production" {
-		defer g.errorClient.Flush()
-		errorEntry := errorreporting.Entry{
-			Error: err.err,
-		}
-		if err.request != nil {
-			errorEntry.Req = err.request.Request
-		}
-		if err.stackTrace != nil {
-			errorEntry.Stack = err.stackTrace
-		}
-		if err.request != nil {
-			errorEntry.Req = err.request.Request
-		}
-		g.errorClient.Report(errorEntry)
+		g.err(err.err, err.stackTrace, err.meta)
 	}
 }
+
 func (g *GcpLog) Error(err ErrorEntry) {
+	g.log(err.err, err.meta, logging.Error)
+
+	if os.Getenv("GO_ENV") == "production" {
+		g.err(err.err, err.stackTrace, err.meta)
+	}
+}
+
+/*
+	Internal methods
+*/
+
+func (g *GcpLog) log(payload interface{}, metadata *LogMetadata, severity logging.Severity) {
 	defer g.logger.Flush()
 	entry := logging.Entry{
 		// Log anything that can be marshaled to JSON.
-		Payload:  err.err,
-		Severity: logging.Error,
+		Payload:  payload,
+		Severity: severity,
 	}
 	if g.resource != nil {
 		entry.Resource = g.resource
 	}
-	if err.trace != "" {
-		entry.Trace = err.trace
-	}
-	if err.request != nil {
-		entry.HTTPRequest = err.request
+	if metadata != nil {
+		if metadata.trace != "" {
+			entry.Trace = metadata.trace
+		}
+		if metadata.request != nil {
+			entry.HTTPRequest = metadata.request
+		}
+		if metadata.user != "" {
+			labels := make(map[string]string)
+			labels["user"] = metadata.user
+			entry.Labels = labels
+		}
 	}
 	g.logger.Log(entry)
+}
 
-	if os.Getenv("GO_ENV") == "production" {
-		defer g.errorClient.Flush()
-		errorEntry := errorreporting.Entry{
-			Error: err.err,
-		}
-		if err.stackTrace != nil {
-			errorEntry.Stack = err.stackTrace
-		}
-		if err.request != nil {
-			errorEntry.Req = err.request.Request
-		}
-		g.errorClient.Report(errorEntry)
+func (g *GcpLog) err(err error, stacktrace []byte, metadata *LogMetadata) {
+	defer g.errorClient.Flush()
+	errorEntry := errorreporting.Entry{
+		Error: err,
 	}
+	if stacktrace != nil {
+		errorEntry.Stack = stacktrace
+	}
+	if metadata != nil && metadata.request != nil {
+		errorEntry.Req = metadata.request.Request
+	}
+	g.errorClient.Report(errorEntry)
 }

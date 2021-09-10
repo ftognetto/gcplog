@@ -53,7 +53,7 @@ func (rw *responseWriter) WriteHeader(code int) {
 
 }
 
-func defaultLog(r *http.Request) string {
+func defaultLogBuilder(r *http.Request) string {
 	log := r.Method + " " + r.URL.Path
 	if r.Header.Get("X-Request-ID") != "" {
 		log = "[" + r.Header.Get("X-Request-ID") + "] " + log
@@ -61,7 +61,7 @@ func defaultLog(r *http.Request) string {
 	return log
 }
 
-func defaultError(r *http.Request, status int, size int, body *bytes.Buffer) error {
+func defaultErrorBuilder(r *http.Request, status int, size int, body *bytes.Buffer) error {
 	var err error
 	if body != nil {
 		err = fmt.Errorf(body.String())
@@ -71,22 +71,61 @@ func defaultError(r *http.Request, status int, size int, body *bytes.Buffer) err
 	return err
 }
 
+func defaultExtractUserFromRequest(r *http.Request) string {
+	return ""
+}
+
+type options struct {
+	logBuilder             func(r *http.Request) string
+	errorBuilder           func(r *http.Request, status int, size int, body *bytes.Buffer) error
+	extractUserFromRequest func(r *http.Request) string
+}
+
+func NewOptions(logBuilder func(r *http.Request) string, errorBuilder func(r *http.Request, status int, size int, body *bytes.Buffer) error, extractUserFromRequest func(r *http.Request) string) options {
+	options := options{}
+
+	if logBuilder != nil {
+		options.logBuilder = logBuilder
+	} else {
+		options.logBuilder = defaultLogBuilder
+	}
+
+	if errorBuilder != nil {
+		options.errorBuilder = errorBuilder
+	} else {
+		options.errorBuilder = defaultErrorBuilder
+	}
+
+	if extractUserFromRequest != nil {
+		options.extractUserFromRequest = extractUserFromRequest
+	} else {
+		options.extractUserFromRequest = defaultExtractUserFromRequest
+	}
+
+	return options
+}
+
 func Middleware(gcplog *GcpLog) func(http.Handler) http.Handler {
-	return middleware(gcplog, defaultLog, defaultError)
+	return middleware(
+		gcplog,
+		options{
+			logBuilder:             defaultLogBuilder,
+			errorBuilder:           defaultErrorBuilder,
+			extractUserFromRequest: defaultExtractUserFromRequest,
+		},
+	)
 }
 
 func MiddlewareCustom(
 	gcplog *GcpLog,
-	logBuilder func(r *http.Request) string,
-	errorBuilder func(r *http.Request, status int, size int, body *bytes.Buffer) error,
+	options options,
 ) func(http.Handler) http.Handler {
-	return middleware(gcplog, logBuilder, errorBuilder)
+	return middleware(gcplog, options)
 }
 
 func middleware(
 	gcplog *GcpLog,
-	logBuilder func(r *http.Request) string,
-	errorBuilder func(r *http.Request, status int, size int, body *bytes.Buffer) error,
+	options options,
 ) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		fn := func(w http.ResponseWriter, r *http.Request) {
@@ -109,32 +148,42 @@ func middleware(
 
 			// after request
 			status := wrapped.status
-			log := logBuilder(r)
-			err := errorBuilder(r, wrapped.status, wrapped.size, wrapped.body)
+			log := options.logBuilder(r)
+			err := options.errorBuilder(r, wrapped.status, wrapped.size, wrapped.body)
 			request := parseRequest(*wrapped, r, start)
 			trace := parseTrace(r, gcplog.projectId)
+			user := options.extractUserFromRequest(r)
 
 			if status < 400 {
 				gcplog.Log(LogEntry{
-					log:     log,
-					trace:   trace,
-					request: &request,
+					log: log,
+					meta: &LogMetadata{
+						trace:   trace,
+						request: &request,
+						user:    user,
+					},
 				})
 				return
 			}
 			if status >= 400 && status < 500 {
 				gcplog.Warn(ErrorEntry{
 					err:        err,
-					trace:      trace,
-					request:    &request,
 					stackTrace: debug.Stack(),
+					meta: &LogMetadata{
+						trace:   trace,
+						request: &request,
+						user:    user,
+					},
 				})
 			} else {
 				gcplog.Error(ErrorEntry{
 					err:        err,
-					trace:      trace,
-					request:    &request,
 					stackTrace: debug.Stack(),
+					meta: &LogMetadata{
+						trace:   trace,
+						request: &request,
+						user:    user,
+					},
 				})
 			}
 		}

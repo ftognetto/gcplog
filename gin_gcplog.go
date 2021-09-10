@@ -43,9 +43,11 @@ func Gin(gcplog *GcpLog) gin.HandlerFunc {
 
 			if status < 400 {
 				gcplog.Log(LogEntry{
-					log:     log,
-					trace:   trace,
-					request: request,
+					log: log,
+					meta: &LogMetadata{
+						trace:   trace,
+						request: request,
+					},
 				})
 				return
 			}
@@ -60,16 +62,20 @@ func Gin(gcplog *GcpLog) gin.HandlerFunc {
 			if status >= 400 && status < 500 {
 				gcplog.Warn(ErrorEntry{
 					err:        err,
-					trace:      trace,
-					request:    request,
 					stackTrace: debug.Stack(),
+					meta: &LogMetadata{
+						trace:   trace,
+						request: request,
+					},
 				})
 			} else {
 				gcplog.Error(ErrorEntry{
 					err:        err,
-					trace:      trace,
-					request:    request,
 					stackTrace: debug.Stack(),
+					meta: &LogMetadata{
+						trace:   trace,
+						request: request,
+					},
 				})
 			}
 		}(time.Now())
