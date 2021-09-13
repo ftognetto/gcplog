@@ -155,14 +155,14 @@ func middleware(
 			user := options.extractUserFromRequest(r)
 
 			if status < 400 {
-				gcplog.Log(LogEntry{
-					log: log,
-					meta: &LogMetadata{
+				gcplog.LogWithMeta(
+					log,
+					LogMetadata{
 						trace:   trace,
 						request: &request,
 						user:    user,
 					},
-				})
+				)
 				return
 			}
 			if status >= 400 && status < 500 {

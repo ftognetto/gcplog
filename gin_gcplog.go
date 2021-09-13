@@ -42,13 +42,13 @@ func Gin(gcplog *GcpLog) gin.HandlerFunc {
 			}
 
 			if status < 400 {
-				gcplog.Log(LogEntry{
-					log: log,
-					meta: &LogMetadata{
+				gcplog.LogWithMeta(
+					log,
+					LogMetadata{
 						trace:   trace,
 						request: request,
 					},
-				})
+				)
 				return
 			}
 

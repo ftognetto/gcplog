@@ -108,8 +108,12 @@ func (g *GcpLog) Close() {
 	}
 }
 
-func (g *GcpLog) Log(log LogEntry) {
-	g.log(log.log, log.meta, logging.Info)
+func (g *GcpLog) Log(log interface{}) {
+	g.log(log, nil, logging.Info)
+}
+
+func (g *GcpLog) LogWithMeta(log interface{}, meta LogMetadata) {
+	g.log(log, &meta, logging.Info)
 }
 
 func (g *GcpLog) Warn(err ErrorEntry) {
