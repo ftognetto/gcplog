@@ -20,10 +20,6 @@ type LogMetadata struct {
 	request *logging.HTTPRequest
 }
 
-type LogEntry struct {
-	log  interface{}
-	meta *LogMetadata
-}
 type ErrorEntry struct {
 	err        error
 	stackTrace []byte
