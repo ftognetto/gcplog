@@ -2,11 +2,8 @@ package gcplog
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"log"
 	"os"
-	"time"
 
 	"cloud.google.com/go/errorreporting"
 	"cloud.google.com/go/logging"
@@ -136,98 +133,34 @@ func (g *GcpLog) Error(err ErrorEntry) {
 /*
 	Internal methods
 */
-type logEntry struct {
-	Severity       string               `json:"severity"`
-	Message        interface{}          `json:"message"`
-	HttpRequest    *logging.HTTPRequest `json:"httpRequest,omitempty"`
-	Timestamp      time.Time            `json:"timestamp"`
-	Labels         map[string]string    `json:"logging.googleapis.com/labels,omitempty"`
-	Operation      *operation           `json:"logging.googleapis.com/operation,omitempty"`
-	SourceLocation *sourceLocation      `json:"logging.googleapis.com/sourceLocation,omitempty"`
-	SpanID         string               `json:"logging.googleapis.com/spanId,omitempty"`
-	TraceID        string               `json:"logging.googleapis.com/trace,omitempty"`
-	TraceSampled   bool                 `json:"logging.googleapis.com/trace_sampled,omitempty"`
-}
-
-type httpRequest struct {
-	RequestMethod                  string `json:"requestMethod,omitempty"`
-	RequestUrl                     string `json:"requestUrl,omitempty"`
-	RequestSize                    string `json:"requestSize,omitempty"`
-	Status                         int    `json:"status,omitempty"`
-	ResponseSize                   string `json:"responseSize,omitempty"`
-	UserAgent                      string `json:"userAgent,omitempty"`
-	RemoteIp                       string `json:"remoteIp,omitempty"`
-	ServerIp                       string `json:"serverIp,omitempty"`
-	Referer                        string `json:"referer,omitempty"`
-	Latency                        string `json:"latency,omitempty"`
-	CacheLookup                    bool   `json:"cacheLookup,omitempty"`
-	CacheHit                       bool   `json:"cacheHit,omitempty"`
-	CacheValidatedWithOriginServer bool   `json:"cacheValidatedWithOriginServer,omitempty"`
-	CacheFillBytes                 string `json:"cacheFillBytes,omitempty"`
-	Protocol                       string `json:"protocol,omitempty"`
-}
-type operation struct {
-	Id       string `json:"id,omitempty"`
-	Producer string `json:"producer,omitempty"`
-	First    string `json:"first,omitempty"`
-	Last     string `json:"last,omitempty"`
-}
-
-type sourceLocation struct {
-	File     string `json:"file,omitempty"`
-	Line     string `json:"line,omitempty"`
-	Function string `json:"function,omitempty"`
-}
 
 func (g *GcpLog) log(payload interface{}, metadata *LogMetadata, severity logging.Severity) {
-	entry := logEntry{
-		Severity:  severity.String(),
-		Message:   payload,
-		Timestamp: time.Now(),
+	defer g.logger.Flush()
+	entry := logging.Entry{
+		// Log anything that can be marshaled to JSON.
+		Payload:  payload,
+		Severity: severity,
 	}
+	// if g.resource != nil {
+	// 	entry.Resource = g.resource
+	// }
 	if metadata != nil {
-		if metadata.request != nil {
-			entry.HttpRequest = metadata.request
-		}
 		if metadata.trace != "" {
-			entry.TraceID = metadata.trace
+			entry.Trace = metadata.trace
 			entry.TraceSampled = metadata.traceSampled
 		}
 		if metadata.span != "" {
 			entry.SpanID = metadata.span
 		}
+		if metadata.request != nil {
+			entry.HTTPRequest = metadata.request
+		}
+		if metadata.user != "" {
+			entry.Labels = map[string]string{"user": metadata.user}
+		}
 	}
 
-	if err := json.NewEncoder(os.Stderr).Encode(entry); err != nil {
-		fmt.Printf("failure to write structured log entry: %v", err)
-	}
-
-	// entry := logging.Entry{
-	// 	// Log anything that can be marshaled to JSON.
-	// 	Payload:  payload,
-	// 	Severity: severity,
-	// }
-	// if g.resource != nil {
-	// 	entry.Resource = g.resource
-	// }
-	// if metadata != nil {
-	// 	if metadata.trace != "" {
-	// 		entry.Trace = metadata.trace
-	// 		entry.TraceSampled = metadata.traceSampled
-	// 	}
-	// 	if metadata.span != "" {
-	// 		entry.SpanID = metadata.span
-	// 	}
-	// 	if metadata.request != nil {
-	// 		entry.HTTPRequest = metadata.request
-	// 	}
-	// 	if metadata.user != "" {
-	// 		entry.Labels = map[string]string{"user": metadata.user}
-	// 	}
-	// }
-
-	// defer g.logger.Flush()
-	// g.logger.Log(entry)
+	g.logger.Log(entry)
 }
 
 func (g *GcpLog) err(err error, stacktrace []byte, metadata *LogMetadata) {
