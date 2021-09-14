@@ -16,16 +16,8 @@ import (
 	Structs
 */
 
-type LogMetadata struct {
-	user         string
-	trace        string
-	traceSampled bool
-	span         string
-	request      *logging.HTTPRequest
-}
-
 type GcpLogOptions struct {
-	extractUserFromRequest func(r *http.Request) string
+	ExtractUserFromRequest func(r *http.Request) string
 }
 
 // type GcpLog interface {
@@ -159,8 +151,8 @@ func (g *GcpLog) log(payload interface{}, request *http.Request, severity loggin
 		entry.Trace = trace
 		entry.SpanID = span
 		entry.TraceSampled = traceSampled
-		if g.options.extractUserFromRequest != nil {
-			user := g.options.extractUserFromRequest(request)
+		if g.options.ExtractUserFromRequest != nil {
+			user := g.options.ExtractUserFromRequest(request)
 			entry.Labels = map[string]string{"user": user}
 		}
 	}
