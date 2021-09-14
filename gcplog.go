@@ -185,16 +185,19 @@ func (g *GcpLog) log(payload interface{}, metadata *LogMetadata, severity loggin
 		Message:   payload,
 		Timestamp: time.Now(),
 	}
-	if metadata.request != nil {
-		entry.HttpRequest = metadata.request
+	if metadata != nil {
+		if metadata.request != nil {
+			entry.HttpRequest = metadata.request
+		}
+		if metadata.trace != "" {
+			entry.TraceID = metadata.trace
+			entry.TraceSampled = metadata.traceSampled
+		}
+		if metadata.span != "" {
+			entry.SpanID = metadata.span
+		}
 	}
-	if metadata.trace != "" {
-		entry.TraceID = metadata.trace
-		entry.TraceSampled = metadata.traceSampled
-	}
-	if metadata.span != "" {
-		entry.SpanID = metadata.span
-	}
+
 	if err := json.NewEncoder(os.Stderr).Encode(entry); err != nil {
 		fmt.Printf("failure to write structured log entry: %v", err)
 	}
