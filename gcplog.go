@@ -2,6 +2,8 @@ package gcplog
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 
@@ -15,9 +17,11 @@ import (
 */
 
 type LogMetadata struct {
-	user    string
-	trace   string
-	request *logging.HTTPRequest
+	user         string
+	trace        string
+	traceSampled bool
+	span         string
+	request      *logging.HTTPRequest
 }
 
 type ErrorEntry struct {
@@ -133,28 +137,34 @@ func (g *GcpLog) Error(err ErrorEntry) {
 */
 
 func (g *GcpLog) log(payload interface{}, metadata *LogMetadata, severity logging.Severity) {
-	defer g.logger.Flush()
+
 	entry := logging.Entry{
 		// Log anything that can be marshaled to JSON.
 		Payload:  payload,
 		Severity: severity,
 	}
-	if g.resource != nil {
-		entry.Resource = g.resource
-	}
+	// if g.resource != nil {
+	// 	entry.Resource = g.resource
+	// }
 	if metadata != nil {
 		if metadata.trace != "" {
 			entry.Trace = metadata.trace
+			entry.TraceSampled = metadata.traceSampled
+		}
+		if metadata.span != "" {
+			entry.SpanID = metadata.span
 		}
 		if metadata.request != nil {
 			entry.HTTPRequest = metadata.request
 		}
 		if metadata.user != "" {
-			labels := make(map[string]string)
-			labels["user"] = metadata.user
-			entry.Labels = labels
+			entry.Labels = map[string]string{"user": metadata.user}
 		}
 	}
+	if err := json.NewEncoder(os.Stderr).Encode(entry); err != nil {
+		fmt.Printf("failure to write structured log entry: %v", err)
+	}
+	defer g.logger.Flush()
 	g.logger.Log(entry)
 }
 

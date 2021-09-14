@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"regexp"
 	"runtime/debug"
-	"strings"
 	"time"
 
 	"cloud.google.com/go/logging"
@@ -151,16 +151,18 @@ func middleware(
 			log := options.logBuilder(r)
 			err := options.errorBuilder(r, wrapped.status, wrapped.size, wrapped.body)
 			request := parseRequest(*wrapped, r, start)
-			trace := parseTrace(r, gcplog.projectId)
+			trace, span, traceSampled := parseTrace(r, gcplog.projectId)
 			user := options.extractUserFromRequest(r)
 
 			if status < 400 {
 				gcplog.LogWithMeta(
 					log,
 					LogMetadata{
-						trace:   trace,
-						request: &request,
-						user:    user,
+						trace:        trace,
+						span:         span,
+						traceSampled: traceSampled,
+						request:      &request,
+						user:         user,
 					},
 				)
 				return
@@ -170,9 +172,11 @@ func middleware(
 					err:        err,
 					stackTrace: debug.Stack(),
 					meta: &LogMetadata{
-						trace:   trace,
-						request: &request,
-						user:    user,
+						trace:        trace,
+						span:         span,
+						traceSampled: traceSampled,
+						request:      &request,
+						user:         user,
 					},
 				})
 			} else {
@@ -180,9 +184,11 @@ func middleware(
 					err:        err,
 					stackTrace: debug.Stack(),
 					meta: &LogMetadata{
-						trace:   trace,
-						request: &request,
-						user:    user,
+						trace:        trace,
+						span:         span,
+						traceSampled: traceSampled,
+						request:      &request,
+						user:         user,
 					},
 				})
 			}
@@ -216,12 +222,29 @@ func parseRequest(w responseWriter, r *http.Request, start time.Time) logging.HT
 	return request
 }
 
-func parseTrace(r *http.Request, projectId string) string {
-	var trace string
-	traceHeader := r.Header.Get("X-Cloud-Trace-Context")
-	traceParts := strings.Split(traceHeader, "/")
-	if len(traceParts) > 0 && len(traceParts[0]) > 0 {
-		trace = fmt.Sprintf("projects/%s/traces/%s", projectId, traceParts[0])
+func parseTrace(r *http.Request, projectId string) (traceId string, spanId string, traceSampled bool) {
+	var traceRegex = regexp.MustCompile(
+		// Matches on "TRACE_ID"
+		`([a-f\d]+)?` +
+			// Matches on "/SPAN_ID"
+			`(?:/([a-f\d]+))?` +
+			// Matches on ";0=TRACE_TRUE"
+			`(?:;o=(\d))?`)
+	matches := traceRegex.FindStringSubmatch(r.Header.Get("X-Cloud-Trace-Context"))
+
+	traceId, spanId, traceSampled = matches[1], matches[2], matches[3] == "1"
+
+	if spanId == "0" {
+		spanId = ""
 	}
-	return trace
+
+	return
+
+	// var trace string
+	// traceHeader := r.Header.Get("X-Cloud-Trace-Context")
+	// traceParts := strings.Split(traceHeader, "/")
+	// if len(traceParts) > 0 && len(traceParts[0]) > 0 {
+	// 	trace = fmt.Sprintf("projects/%s/traces/%s", projectId, traceParts[0])
+	// }
+	// return trace
 }
