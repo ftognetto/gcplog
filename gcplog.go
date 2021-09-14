@@ -137,16 +137,16 @@ func (g *GcpLog) Error(err ErrorEntry) {
 	Internal methods
 */
 type logEntry struct {
-	Severity       string            `json:"severity"`
-	Message        interface{}       `json:"message"`
-	HttpRequest    *httpRequest      `json:"httpRequest,omitempty"`
-	Timestamp      time.Time         `json:"timestamp"`
-	Labels         map[string]string `json:"logging.googleapis.com/labels,omitempty"`
-	Operation      *operation        `json:"logging.googleapis.com/operation,omitempty"`
-	SourceLocation *sourceLocation   `json:"logging.googleapis.com/sourceLocation,omitempty"`
-	SpanID         string            `json:"logging.googleapis.com/spanId,omitempty"`
-	TraceID        string            `json:"logging.googleapis.com/trace,omitempty"`
-	TraceSampled   bool              `json:"logging.googleapis.com/trace_sampled,omitempty"`
+	Severity       string               `json:"severity"`
+	Message        interface{}          `json:"message"`
+	HttpRequest    *logging.HTTPRequest `json:"httpRequest,omitempty"`
+	Timestamp      time.Time            `json:"timestamp"`
+	Labels         map[string]string    `json:"logging.googleapis.com/labels,omitempty"`
+	Operation      *operation           `json:"logging.googleapis.com/operation,omitempty"`
+	SourceLocation *sourceLocation      `json:"logging.googleapis.com/sourceLocation,omitempty"`
+	SpanID         string               `json:"logging.googleapis.com/spanId,omitempty"`
+	TraceID        string               `json:"logging.googleapis.com/trace,omitempty"`
+	TraceSampled   bool                 `json:"logging.googleapis.com/trace_sampled,omitempty"`
 }
 
 type httpRequest struct {
@@ -186,13 +186,7 @@ func (g *GcpLog) log(payload interface{}, metadata *LogMetadata, severity loggin
 		Timestamp: time.Now(),
 	}
 	if metadata.request != nil {
-		entry.HttpRequest = &httpRequest{
-			RequestMethod: metadata.request.Request.Method,
-			RequestUrl:    metadata.request.Request.URL.String(),
-			UserAgent:     metadata.request.Request.UserAgent(),
-			RemoteIp:      metadata.request.Request.RemoteAddr,
-			Referer:       metadata.request.Request.Referer(),
-		}
+		entry.HttpRequest = metadata.request
 	}
 	if metadata.trace != "" {
 		entry.TraceID = metadata.trace
