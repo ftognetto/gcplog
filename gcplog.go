@@ -3,11 +3,13 @@ package gcplog
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
+	"regexp"
+	"runtime/debug"
 
 	"cloud.google.com/go/errorreporting"
 	"cloud.google.com/go/logging"
-	"google.golang.org/genproto/googleapis/api/monitoredres"
 )
 
 /*
@@ -22,10 +24,8 @@ type LogMetadata struct {
 	request      *logging.HTTPRequest
 }
 
-type ErrorEntry struct {
-	err        error
-	stackTrace []byte
-	meta       *LogMetadata
+type GcpLogOptions struct {
+	extractUserFromRequest func(r *http.Request) string
 }
 
 // type GcpLog interface {
@@ -45,10 +45,10 @@ type GcpLog struct {
 	loggingClient *logging.Client
 	errorClient   *errorreporting.Client
 	logger        *logging.Logger
-	resource      *monitoredres.MonitoredResource
+	options       *GcpLogOptions
 }
 
-func NewGcpLog(projectId string, serviceName string, resource string) GcpLog {
+func NewGcpLog(projectId string, serviceName string, options GcpLogOptions) GcpLog {
 
 	if projectId == "" || serviceName == "" {
 		panic("Gcp log not correctly initialized.")
@@ -81,15 +81,7 @@ func NewGcpLog(projectId string, serviceName string, resource string) GcpLog {
 		loggingClient: loggingClient,
 		errorClient:   errorClient,
 		logger:        logger,
-	}
-	if resource != "" {
-		instance.resource = &monitoredres.MonitoredResource{
-			Type: resource,
-			Labels: map[string]string{
-				"project_id":   projectId,
-				"service_name": serviceName,
-			},
-		}
+		options:       &options,
 	}
 	return instance
 }
@@ -110,23 +102,39 @@ func (g *GcpLog) Log(log interface{}) {
 	g.log(log, nil, logging.Info)
 }
 
-func (g *GcpLog) LogWithMeta(log interface{}, meta LogMetadata) {
-	g.log(log, &meta, logging.Info)
+func (g *GcpLog) LogR(log interface{}, request *http.Request) {
+	g.log(log, request, logging.Info)
 }
 
-func (g *GcpLog) Warn(err ErrorEntry) {
-	g.log(err.err, err.meta, logging.Warning)
+func (g *GcpLog) Warn(err error) {
+	g.log(err, nil, logging.Warning)
 
 	if os.Getenv("GO_ENV") == "production" {
-		g.err(err.err, err.stackTrace, err.meta)
+		g.err(err, nil)
 	}
 }
 
-func (g *GcpLog) Error(err ErrorEntry) {
-	g.log(err.err, err.meta, logging.Error)
+func (g *GcpLog) WarnR(err error, request *http.Request) {
+	g.log(err, request, logging.Warning)
 
 	if os.Getenv("GO_ENV") == "production" {
-		g.err(err.err, err.stackTrace, err.meta)
+		g.err(err, request)
+	}
+}
+
+func (g *GcpLog) Error(err error) {
+	g.log(err, nil, logging.Error)
+
+	if os.Getenv("GO_ENV") == "production" {
+		g.err(err, nil)
+	}
+}
+
+func (g *GcpLog) ErrorR(err error, request *http.Request) {
+	g.log(err, request, logging.Error)
+
+	if os.Getenv("GO_ENV") == "production" {
+		g.err(err, request)
 	}
 }
 
@@ -134,7 +142,7 @@ func (g *GcpLog) Error(err ErrorEntry) {
 	Internal methods
 */
 
-func (g *GcpLog) log(payload interface{}, metadata *LogMetadata, severity logging.Severity) {
+func (g *GcpLog) log(payload interface{}, request *http.Request, severity logging.Severity) {
 	defer g.logger.Flush()
 	entry := logging.Entry{
 		// Log anything that can be marshaled to JSON.
@@ -144,35 +152,72 @@ func (g *GcpLog) log(payload interface{}, metadata *LogMetadata, severity loggin
 	// if g.resource != nil {
 	// 	entry.Resource = g.resource
 	// }
-	if metadata != nil {
-		if metadata.trace != "" {
-			entry.Trace = metadata.trace
-			entry.TraceSampled = metadata.traceSampled
-		}
-		if metadata.span != "" {
-			entry.SpanID = metadata.span
-		}
-		if metadata.request != nil {
-			entry.HTTPRequest = metadata.request
-		}
-		if metadata.user != "" {
-			entry.Labels = map[string]string{"user": metadata.user}
+	if request != nil {
+		httpRequest := parseRequest(request)
+		entry.HTTPRequest = &httpRequest
+		trace, span, traceSampled := parseTrace(request, g.projectId)
+		entry.Trace = trace
+		entry.SpanID = span
+		entry.TraceSampled = traceSampled
+		if g.options.extractUserFromRequest != nil {
+			user := g.options.extractUserFromRequest(request)
+			entry.Labels = map[string]string{"user": user}
 		}
 	}
-
 	g.logger.Log(entry)
 }
 
-func (g *GcpLog) err(err error, stacktrace []byte, metadata *LogMetadata) {
+func (g *GcpLog) err(err error, request *http.Request) {
 	defer g.errorClient.Flush()
 	errorEntry := errorreporting.Entry{
 		Error: err,
+		Stack: debug.Stack(),
 	}
-	if stacktrace != nil {
-		errorEntry.Stack = stacktrace
-	}
-	if metadata != nil && metadata.request != nil {
-		errorEntry.Req = metadata.request.Request
+	if request != nil {
+		errorEntry.Req = request
 	}
 	g.errorClient.Report(errorEntry)
+}
+
+func parseRequest(r *http.Request) logging.HTTPRequest {
+
+	localIp := r.Header.Get("X-Real-Ip")
+	if localIp == "" {
+		localIp = r.Header.Get("X-Forwarded-For")
+	}
+	if localIp == "" {
+		localIp = r.RemoteAddr
+	}
+
+	request := logging.HTTPRequest{
+		Request:     r,
+		RequestSize: r.ContentLength,
+		//Status:       w.Status(),
+		//ResponseSize: int64(w.Size()),
+		//Latency:       time.Since(start),
+
+		LocalIP:  localIp,
+		RemoteIP: r.RemoteAddr,
+	}
+
+	return request
+}
+
+func parseTrace(r *http.Request, projectId string) (traceId string, spanId string, traceSampled bool) {
+	var traceRegex = regexp.MustCompile(
+		// Matches on "TRACE_ID"
+		`([a-f\d]+)?` +
+			// Matches on "/SPAN_ID"
+			`(?:/([a-f\d]+))?` +
+			// Matches on ";0=TRACE_TRUE"
+			`(?:;o=(\d))?`)
+	matches := traceRegex.FindStringSubmatch(r.Header.Get("X-Cloud-Trace-Context"))
+
+	traceId, spanId, traceSampled = matches[1], matches[2], matches[3] == "1"
+
+	if spanId == "0" {
+		spanId = ""
+	}
+
+	return
 }

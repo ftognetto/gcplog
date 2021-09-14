@@ -4,11 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
-	"regexp"
-	"runtime/debug"
-	"time"
-
-	"cloud.google.com/go/logging"
 )
 
 // responseWriter is a minimal wrapper for http.responseWriter that allows the
@@ -134,15 +129,12 @@ func middleware(
 
 				if err := recover(); err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
-					gcplog.Error(ErrorEntry{
-						err:        err.(error),
-						stackTrace: debug.Stack(),
-					})
+					gcplog.ErrorR(err.(error), r)
 
 				}
 			}()
 
-			start := time.Now()
+			// start := time.Now()
 			wrapped := wrapResponseWriter(w)
 			next.ServeHTTP(wrapped, r)
 
@@ -150,101 +142,21 @@ func middleware(
 			status := wrapped.status
 			log := options.logBuilder(r)
 			err := options.errorBuilder(r, wrapped.status, wrapped.size, wrapped.body)
-			request := parseRequest(*wrapped, r, start)
-			trace, span, traceSampled := parseTrace(r, gcplog.projectId)
-			user := options.extractUserFromRequest(r)
+			// request := parseRequest(*wrapped, r, start)
+			// trace, span, traceSampled := parseTrace(r, gcplog.projectId)
+			// user := options.extractUserFromRequest(r)
 
 			if status < 400 {
-				gcplog.LogWithMeta(
-					log,
-					LogMetadata{
-						trace:        trace,
-						span:         span,
-						traceSampled: traceSampled,
-						request:      &request,
-						user:         user,
-					},
-				)
+				gcplog.LogR(log, r)
 				return
 			}
 			if status >= 400 && status < 500 {
-				gcplog.Warn(ErrorEntry{
-					err:        err,
-					stackTrace: debug.Stack(),
-					meta: &LogMetadata{
-						trace:        trace,
-						span:         span,
-						traceSampled: traceSampled,
-						request:      &request,
-						user:         user,
-					},
-				})
+				gcplog.WarnR(err, r)
 			} else {
-				gcplog.Error(ErrorEntry{
-					err:        err,
-					stackTrace: debug.Stack(),
-					meta: &LogMetadata{
-						trace:        trace,
-						span:         span,
-						traceSampled: traceSampled,
-						request:      &request,
-						user:         user,
-					},
-				})
+				gcplog.ErrorR(err, r)
 			}
 		}
 
 		return http.HandlerFunc(fn)
 	}
-}
-
-func parseRequest(w responseWriter, r *http.Request, start time.Time) logging.HTTPRequest {
-
-	localIp := r.Header.Get("X-Real-Ip")
-	if localIp == "" {
-		localIp = r.Header.Get("X-Forwarded-For")
-	}
-	if localIp == "" {
-		localIp = r.RemoteAddr
-	}
-
-	request := logging.HTTPRequest{
-		Request:      r,
-		RequestSize:  r.ContentLength,
-		Status:       w.Status(),
-		ResponseSize: int64(w.Size()),
-		Latency:      time.Since(start),
-
-		LocalIP:  localIp,
-		RemoteIP: r.RemoteAddr,
-	}
-
-	return request
-}
-
-func parseTrace(r *http.Request, projectId string) (traceId string, spanId string, traceSampled bool) {
-	var traceRegex = regexp.MustCompile(
-		// Matches on "TRACE_ID"
-		`([a-f\d]+)?` +
-			// Matches on "/SPAN_ID"
-			`(?:/([a-f\d]+))?` +
-			// Matches on ";0=TRACE_TRUE"
-			`(?:;o=(\d))?`)
-	matches := traceRegex.FindStringSubmatch(r.Header.Get("X-Cloud-Trace-Context"))
-
-	traceId, spanId, traceSampled = matches[1], matches[2], matches[3] == "1"
-
-	if spanId == "0" {
-		spanId = ""
-	}
-
-	return
-
-	// var trace string
-	// traceHeader := r.Header.Get("X-Cloud-Trace-Context")
-	// traceParts := strings.Split(traceHeader, "/")
-	// if len(traceParts) > 0 && len(traceParts[0]) > 0 {
-	// 	trace = fmt.Sprintf("projects/%s/traces/%s", projectId, traceParts[0])
-	// }
-	// return trace
 }
