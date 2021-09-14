@@ -164,8 +164,8 @@ func (g *GcpLog) log(payload interface{}, metadata *LogMetadata, severity loggin
 	if err := json.NewEncoder(os.Stderr).Encode(entry); err != nil {
 		fmt.Printf("failure to write structured log entry: %v", err)
 	}
-	defer g.logger.Flush()
-	g.logger.Log(entry)
+	// defer g.logger.Flush()
+	// g.logger.Log(entry)
 }
 
 func (g *GcpLog) err(err error, stacktrace []byte, metadata *LogMetadata) {
