@@ -20,7 +20,11 @@ func Gin(gcplog *GcpLog) gin.HandlerFunc {
 			// after request
 			status := c.Writer.Status()
 			log := c.Request.Method + " " + c.Request.URL.Path
-
+			responseMeta := ResponseMeta{
+				Status:  c.Writer.Status(),
+				Size:    c.Writer.Size(),
+				Latency: time.Since(begin),
+			}
 			// request := &logging.HTTPRequest{
 			// 	Request:      c.Request,
 			// 	RequestSize:  c.Request.ContentLength,
@@ -38,12 +42,8 @@ func Gin(gcplog *GcpLog) gin.HandlerFunc {
 			// 	trace = fmt.Sprintf("projects/%s/traces/%s", gcplog.projectId, traceParts[0])
 			// }
 
-			request := c.Request
-			request.Response.StatusCode = c.Writer.Status()
-			request.Response.ContentLength = int64(c.Writer.Size())
-
 			if status < 400 {
-				gcplog.LogR(log, c.Request)
+				gcplog.LogRM(log, c.Request, &responseMeta)
 				return
 			}
 
@@ -55,9 +55,9 @@ func Gin(gcplog *GcpLog) gin.HandlerFunc {
 			}
 
 			if status >= 400 && status < 500 {
-				gcplog.WarnR(err, c.Request)
+				gcplog.WarnRM(err, c.Request, &responseMeta)
 			} else {
-				gcplog.ErrorR(err, c.Request)
+				gcplog.ErrorRM(err, c.Request, &responseMeta)
 			}
 		}(time.Now())
 

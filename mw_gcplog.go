@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // responseWriter is a minimal wrapper for http.responseWriter that allows the
@@ -134,7 +135,7 @@ func middleware(
 				}
 			}()
 
-			// start := time.Now()
+			begin := time.Now()
 			wrapped := wrapResponseWriter(w)
 			next.ServeHTTP(wrapped, r)
 
@@ -142,21 +143,18 @@ func middleware(
 			status := wrapped.status
 			log := options.logBuilder(r)
 			err := options.errorBuilder(r, wrapped.status, wrapped.size, wrapped.body)
-			r.Response.ContentLength = int64(wrapped.Size())
-			r.Response.StatusCode = wrapped.Status()
-
-			// request := parseRequest(*wrapped, r, start)
-			// trace, span, traceSampled := parseTrace(r, gcplog.projectId)
-			// user := options.extractUserFromRequest(r)
+			responseMeta := ResponseMeta{
+				Size:    wrapped.Size(),
+				Status:  wrapped.Status(),
+				Latency: time.Since(begin),
+			}
 
 			if status < 400 {
-				gcplog.LogR(log, r)
-				return
-			}
-			if status >= 400 && status < 500 {
-				gcplog.WarnR(err, r)
+				gcplog.LogRM(log, r, &responseMeta)
+			} else if status >= 400 && status < 500 {
+				gcplog.WarnRM(err, r, &responseMeta)
 			} else {
-				gcplog.ErrorR(err, r)
+				gcplog.ErrorRM(err, r, &responseMeta)
 			}
 		}
 

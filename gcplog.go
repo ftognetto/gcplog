@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"runtime/debug"
+	"time"
 
 	"cloud.google.com/go/errorreporting"
 	"cloud.google.com/go/logging"
@@ -18,6 +19,12 @@ import (
 
 type GcpLogOptions struct {
 	ExtractUserFromRequest func(r *http.Request) string
+}
+
+type ResponseMeta struct {
+	Status  int
+	Size    int
+	Latency time.Duration
 }
 
 // type GcpLog interface {
@@ -90,16 +97,24 @@ func (g *GcpLog) Close() {
 	}
 }
 
+// LOG
+
 func (g *GcpLog) Log(log interface{}) {
-	g.log(log, nil, logging.Info)
+	g.log(log, nil, nil, logging.Info)
 }
 
 func (g *GcpLog) LogR(log interface{}, request *http.Request) {
-	g.log(log, request, logging.Info)
+	g.log(log, request, nil, logging.Info)
 }
 
+func (g *GcpLog) LogRM(log interface{}, request *http.Request, responseMeta *ResponseMeta) {
+	g.log(log, request, responseMeta, logging.Info)
+}
+
+// WARN
+
 func (g *GcpLog) Warn(err error) {
-	g.log(err, nil, logging.Warning)
+	g.log(err, nil, nil, logging.Warning)
 
 	if os.Getenv("GO_ENV") == "production" {
 		g.err(err, nil)
@@ -107,15 +122,25 @@ func (g *GcpLog) Warn(err error) {
 }
 
 func (g *GcpLog) WarnR(err error, request *http.Request) {
-	g.log(err, request, logging.Warning)
+	g.log(err, request, nil, logging.Warning)
 
 	if os.Getenv("GO_ENV") == "production" {
 		g.err(err, request)
 	}
 }
 
+func (g *GcpLog) WarnRM(err error, request *http.Request, responseMeta *ResponseMeta) {
+	g.log(err, request, responseMeta, logging.Warning)
+
+	if os.Getenv("GO_ENV") == "production" {
+		g.err(err, request)
+	}
+}
+
+// ERROR
+
 func (g *GcpLog) Error(err error) {
-	g.log(err, nil, logging.Error)
+	g.log(err, nil, nil, logging.Error)
 
 	if os.Getenv("GO_ENV") == "production" {
 		g.err(err, nil)
@@ -123,7 +148,15 @@ func (g *GcpLog) Error(err error) {
 }
 
 func (g *GcpLog) ErrorR(err error, request *http.Request) {
-	g.log(err, request, logging.Error)
+	g.log(err, request, nil, logging.Error)
+
+	if os.Getenv("GO_ENV") == "production" {
+		g.err(err, request)
+	}
+}
+
+func (g *GcpLog) ErrorRM(err error, request *http.Request, responseMeta *ResponseMeta) {
+	g.log(err, request, responseMeta, logging.Error)
 
 	if os.Getenv("GO_ENV") == "production" {
 		g.err(err, request)
@@ -134,18 +167,14 @@ func (g *GcpLog) ErrorR(err error, request *http.Request) {
 	Internal methods
 */
 
-func (g *GcpLog) log(payload interface{}, request *http.Request, severity logging.Severity) {
+func (g *GcpLog) log(payload interface{}, request *http.Request, responseMeta *ResponseMeta, severity logging.Severity) {
 	defer g.logger.Flush()
 	entry := logging.Entry{
-		// Log anything that can be marshaled to JSON.
 		Payload:  payload,
 		Severity: severity,
 	}
-	// if g.resource != nil {
-	// 	entry.Resource = g.resource
-	// }
 	if request != nil {
-		httpRequest := parseRequest(request)
+		httpRequest := parseRequest(request, responseMeta)
 		entry.HTTPRequest = &httpRequest
 		trace, span, traceSampled := parseTrace(request, g.projectId)
 		entry.Trace = trace
@@ -171,7 +200,7 @@ func (g *GcpLog) err(err error, request *http.Request) {
 	g.errorClient.Report(errorEntry)
 }
 
-func parseRequest(r *http.Request) logging.HTTPRequest {
+func parseRequest(r *http.Request, w *ResponseMeta) logging.HTTPRequest {
 
 	localIp := r.Header.Get("X-Real-Ip")
 	if localIp == "" {
@@ -184,13 +213,13 @@ func parseRequest(r *http.Request) logging.HTTPRequest {
 	request := logging.HTTPRequest{
 		Request:     r,
 		RequestSize: r.ContentLength,
-
-		LocalIP:  localIp,
-		RemoteIP: r.RemoteAddr,
+		LocalIP:     localIp,
+		RemoteIP:    r.RemoteAddr,
 	}
-	if r.Response != nil {
-		request.Status = r.Response.StatusCode
-		request.ResponseSize = r.Response.ContentLength
+	if w != nil {
+		request.Status = w.Status
+		request.ResponseSize = int64(w.Size)
+		request.Latency = w.Latency
 	}
 
 	return request
