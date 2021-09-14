@@ -191,6 +191,10 @@ func parseRequest(r *http.Request) logging.HTTPRequest {
 		LocalIP:  localIp,
 		RemoteIP: r.RemoteAddr,
 	}
+	if r.Response != nil {
+		request.Status = r.Response.StatusCode
+		request.ResponseSize = r.Response.ContentLength
+	}
 
 	return request
 }

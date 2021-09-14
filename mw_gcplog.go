@@ -142,6 +142,9 @@ func middleware(
 			status := wrapped.status
 			log := options.logBuilder(r)
 			err := options.errorBuilder(r, wrapped.status, wrapped.size, wrapped.body)
+			r.Response.ContentLength = int64(wrapped.Size())
+			r.Response.StatusCode = wrapped.Status()
+
 			// request := parseRequest(*wrapped, r, start)
 			// trace, span, traceSampled := parseTrace(r, gcplog.projectId)
 			// user := options.extractUserFromRequest(r)
