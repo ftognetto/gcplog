@@ -184,9 +184,6 @@ func parseRequest(r *http.Request) logging.HTTPRequest {
 	request := logging.HTTPRequest{
 		Request:     r,
 		RequestSize: r.ContentLength,
-		Status:      r.Response.StatusCode,
-
-		ResponseSize: r.Response.ContentLength,
 
 		LocalIP:  localIp,
 		RemoteIP: r.RemoteAddr,
