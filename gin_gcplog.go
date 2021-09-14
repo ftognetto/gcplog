@@ -38,6 +38,10 @@ func Gin(gcplog *GcpLog) gin.HandlerFunc {
 			// 	trace = fmt.Sprintf("projects/%s/traces/%s", gcplog.projectId, traceParts[0])
 			// }
 
+			request := c.Request
+			request.Response.StatusCode = c.Writer.Status()
+			request.Response.ContentLength = int64(c.Writer.Size())
+
 			if status < 400 {
 				gcplog.LogR(log, c.Request)
 				return
