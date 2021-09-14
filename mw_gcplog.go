@@ -131,7 +131,7 @@ func middleware(
 			status := wrapped.status
 			log := options.logBuilder(r)
 			err := options.errorBuilder(r, wrapped.status, wrapped.size, wrapped.body)
-			responseMeta := ResponseMeta{
+			responseMeta := ResponseMetadata{
 				Size:    wrapped.Size(),
 				Status:  wrapped.Status(),
 				Latency: time.Since(begin),

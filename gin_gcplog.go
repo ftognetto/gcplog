@@ -20,7 +20,7 @@ func Gin(gcplog *GcpLog) gin.HandlerFunc {
 			// after request
 			status := c.Writer.Status()
 			log := c.Request.Method + " " + c.Request.URL.Path
-			responseMeta := ResponseMeta{
+			responseMeta := ResponseMetadata{
 				Status:  c.Writer.Status(),
 				Size:    c.Writer.Size(),
 				Latency: time.Since(begin),

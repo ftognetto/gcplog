@@ -22,7 +22,7 @@ type GcpLogOptions struct {
 	ExtractUserFromRequest func(r *http.Request) string
 }
 
-type ResponseMeta struct {
+type ResponseMetadata struct {
 	Status  int
 	Size    int
 	Latency time.Duration
@@ -108,7 +108,7 @@ func (g *GcpLog) LogR(log interface{}, request *http.Request) {
 	g.log(log, request, nil, logging.Info)
 }
 
-func (g *GcpLog) LogRM(log interface{}, request *http.Request, responseMeta *ResponseMeta) {
+func (g *GcpLog) LogRM(log interface{}, request *http.Request, responseMeta *ResponseMetadata) {
 	g.log(log, request, responseMeta, logging.Info)
 }
 
@@ -130,7 +130,7 @@ func (g *GcpLog) WarnR(err error, request *http.Request) {
 	}
 }
 
-func (g *GcpLog) WarnRM(err error, request *http.Request, responseMeta *ResponseMeta) {
+func (g *GcpLog) WarnRM(err error, request *http.Request, responseMeta *ResponseMetadata) {
 	g.log(err, request, responseMeta, logging.Warning)
 
 	if os.Getenv("GO_ENV") == "production" {
@@ -156,7 +156,7 @@ func (g *GcpLog) ErrorR(err error, request *http.Request) {
 	}
 }
 
-func (g *GcpLog) ErrorRM(err error, request *http.Request, responseMeta *ResponseMeta) {
+func (g *GcpLog) ErrorRM(err error, request *http.Request, responseMeta *ResponseMetadata) {
 	g.log(err, request, responseMeta, logging.Error)
 
 	if os.Getenv("GO_ENV") == "production" {
@@ -168,7 +168,7 @@ func (g *GcpLog) ErrorRM(err error, request *http.Request, responseMeta *Respons
 	Internal methods
 */
 
-func (g *GcpLog) log(payload interface{}, request *http.Request, responseMeta *ResponseMeta, severity logging.Severity) {
+func (g *GcpLog) log(payload interface{}, request *http.Request, responseMeta *ResponseMetadata, severity logging.Severity) {
 	defer g.logger.Flush()
 	entry := logging.Entry{
 		Payload:  payload,
@@ -201,7 +201,7 @@ func (g *GcpLog) err(err error, request *http.Request) {
 	g.errorClient.Report(errorEntry)
 }
 
-func parseRequest(r *http.Request, w *ResponseMeta) logging.HTTPRequest {
+func parseRequest(r *http.Request, w *ResponseMetadata) logging.HTTPRequest {
 
 	localIp := r.Header.Get("X-Real-Ip")
 	if localIp == "" {
