@@ -25,22 +25,6 @@ func Gin(gcplog *GcpLog) gin.HandlerFunc {
 				Size:    c.Writer.Size(),
 				Latency: time.Since(begin),
 			}
-			// request := &logging.HTTPRequest{
-			// 	Request:      c.Request,
-			// 	RequestSize:  c.Request.ContentLength,
-			// 	Status:       c.Writer.Status(),
-			// 	ResponseSize: int64(c.Writer.Size()),
-			// 	Latency:      time.Since(begin),
-
-			// 	LocalIP:  c.ClientIP(),
-			// 	RemoteIP: c.Request.RemoteAddr,
-			// }
-			// var trace string
-			// traceHeader := c.Request.Header.Get("X-Cloud-Trace-Context")
-			// traceParts := strings.Split(traceHeader, "/")
-			// if len(traceParts) > 0 && len(traceParts[0]) > 0 {
-			// 	trace = fmt.Sprintf("projects/%s/traces/%s", gcplog.projectId, traceParts[0])
-			// }
 
 			if status < 400 {
 				gcplog.LogRM(log, c.Request, &responseMeta)

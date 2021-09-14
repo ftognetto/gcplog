@@ -67,17 +67,12 @@ func defaultErrorBuilder(r *http.Request, status int, size int, body *bytes.Buff
 	return err
 }
 
-func defaultExtractUserFromRequest(r *http.Request) string {
-	return ""
-}
-
 type options struct {
-	logBuilder             func(r *http.Request) string
-	errorBuilder           func(r *http.Request, status int, size int, body *bytes.Buffer) error
-	extractUserFromRequest func(r *http.Request) string
+	logBuilder   func(r *http.Request) string
+	errorBuilder func(r *http.Request, status int, size int, body *bytes.Buffer) error
 }
 
-func NewOptions(logBuilder func(r *http.Request) string, errorBuilder func(r *http.Request, status int, size int, body *bytes.Buffer) error, extractUserFromRequest func(r *http.Request) string) options {
+func NewOptions(logBuilder func(r *http.Request) string, errorBuilder func(r *http.Request, status int, size int, body *bytes.Buffer) error) options {
 	options := options{}
 
 	if logBuilder != nil {
@@ -92,12 +87,6 @@ func NewOptions(logBuilder func(r *http.Request) string, errorBuilder func(r *ht
 		options.errorBuilder = defaultErrorBuilder
 	}
 
-	if extractUserFromRequest != nil {
-		options.extractUserFromRequest = extractUserFromRequest
-	} else {
-		options.extractUserFromRequest = defaultExtractUserFromRequest
-	}
-
 	return options
 }
 
@@ -105,9 +94,8 @@ func Middleware(gcplog *GcpLog) func(http.Handler) http.Handler {
 	return middleware(
 		gcplog,
 		options{
-			logBuilder:             defaultLogBuilder,
-			errorBuilder:           defaultErrorBuilder,
-			extractUserFromRequest: defaultExtractUserFromRequest,
+			logBuilder:   defaultLogBuilder,
+			errorBuilder: defaultErrorBuilder,
 		},
 	)
 }
