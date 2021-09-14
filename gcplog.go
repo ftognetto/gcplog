@@ -2,6 +2,7 @@ package gcplog
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -237,6 +238,9 @@ func parseTrace(r *http.Request, projectId string) (traceId string, spanId strin
 
 	traceId, spanId, traceSampled = matches[1], matches[2], matches[3] == "1"
 
+	if traceId != "" {
+		traceId = fmt.Sprintf("projects/%s/traces/%s", projectId, traceId)
+	}
 	if spanId == "0" {
 		spanId = ""
 	}
