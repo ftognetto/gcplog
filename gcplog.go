@@ -101,66 +101,66 @@ func (g *GcpLog) Close() {
 // LOG
 
 func (g *GcpLog) Log(log interface{}) {
-	g.log(log, nil, nil, logging.Info)
+	go g.log(log, nil, nil, logging.Info)
 }
 
 func (g *GcpLog) LogR(log interface{}, request *http.Request) {
-	g.log(log, request, nil, logging.Info)
+	go g.log(log, request, nil, logging.Info)
 }
 
 func (g *GcpLog) LogRM(log interface{}, request *http.Request, responseMeta *ResponseMetadata) {
-	g.log(log, request, responseMeta, logging.Info)
+	go g.log(log, request, responseMeta, logging.Info)
 }
 
 // WARN
 
 func (g *GcpLog) Warn(err error) {
-	g.log(err, nil, nil, logging.Warning)
+	go g.log(err, nil, nil, logging.Warning)
 
 	if os.Getenv("GO_ENV") == "production" {
-		g.err(err, nil)
+		go g.err(err, nil)
 	}
 }
 
 func (g *GcpLog) WarnR(err error, request *http.Request) {
-	g.log(err, request, nil, logging.Warning)
+	go g.log(err, request, nil, logging.Warning)
 
 	if os.Getenv("GO_ENV") == "production" {
-		g.err(err, request)
+		go g.err(err, request)
 	}
 }
 
 func (g *GcpLog) WarnRM(err error, request *http.Request, responseMeta *ResponseMetadata) {
-	g.log(err, request, responseMeta, logging.Warning)
+	go g.log(err, request, responseMeta, logging.Warning)
 
 	if os.Getenv("GO_ENV") == "production" {
-		g.err(err, request)
+		go g.err(err, request)
 	}
 }
 
 // ERROR
 
 func (g *GcpLog) Error(err error) {
-	g.log(err, nil, nil, logging.Error)
+	go g.log(err, nil, nil, logging.Error)
 
 	if os.Getenv("GO_ENV") == "production" {
-		g.err(err, nil)
+		go g.err(err, nil)
 	}
 }
 
 func (g *GcpLog) ErrorR(err error, request *http.Request) {
-	g.log(err, request, nil, logging.Error)
+	go g.log(err, request, nil, logging.Error)
 
 	if os.Getenv("GO_ENV") == "production" {
-		g.err(err, request)
+		go g.err(err, request)
 	}
 }
 
 func (g *GcpLog) ErrorRM(err error, request *http.Request, responseMeta *ResponseMetadata) {
-	g.log(err, request, responseMeta, logging.Error)
+	go g.log(err, request, responseMeta, logging.Error)
 
 	if os.Getenv("GO_ENV") == "production" {
-		g.err(err, request)
+		go g.err(err, request)
 	}
 }
 
