@@ -1,11 +1,22 @@
 package gcplog
 
 import (
+	"bytes"
 	"fmt"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
+
+type bodyLogWriter struct {
+    gin.ResponseWriter
+    body *bytes.Buffer
+}
+
+func (w bodyLogWriter) Write(b []byte) (int, error) {
+    w.body.Write(b)
+    return w.ResponseWriter.Write(b)
+}
 
 func Gin(gcplog *GcpLog) gin.HandlerFunc {
 
@@ -14,6 +25,8 @@ func Gin(gcplog *GcpLog) gin.HandlerFunc {
 		// before request
 		// log the body maybe..
 		// ...do something
+		blw := &bodyLogWriter{body: bytes.NewBufferString(""), ResponseWriter: c.Writer}
+    	c.Writer = blw
 
 		defer func(begin time.Time) {
 
@@ -35,7 +48,7 @@ func Gin(gcplog *GcpLog) gin.HandlerFunc {
 			if len(c.Errors) > 0 {
 				err = c.Errors.Last().Err
 			} else {
-				err = fmt.Errorf(log)
+				err = fmt.Errorf(blw.body.String())
 			}
 
 			if status >= 400 && status < 500 {
@@ -45,6 +58,7 @@ func Gin(gcplog *GcpLog) gin.HandlerFunc {
 			}
 		}(time.Now())
 
+		
 		c.Next()
 	}
 }
