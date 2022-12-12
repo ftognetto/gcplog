@@ -20,6 +20,7 @@ import (
 
 type GcpLogOptions struct {
 	ExtractUserFromRequest func(r *http.Request) string
+	DevelopmentLogger *log.Logger
 }
 
 type ResponseMetadata struct {
@@ -169,24 +170,29 @@ func (g *GcpLog) ErrorRM(err error, request *http.Request, responseMeta *Respons
 */
 
 func (g *GcpLog) log(payload interface{}, request *http.Request, responseMeta *ResponseMetadata, severity logging.Severity) {
-	defer g.logger.Flush()
-	entry := logging.Entry{
-		Payload:  payload,
-		Severity: severity,
-	}
-	if request != nil {
-		httpRequest := parseRequest(request, responseMeta)
-		entry.HTTPRequest = &httpRequest
-		trace, span, traceSampled := parseTrace(request, g.projectId)
-		entry.Trace = trace
-		entry.SpanID = span
-		entry.TraceSampled = traceSampled
-		if g.options.ExtractUserFromRequest != nil {
-			user := g.options.ExtractUserFromRequest(request)
-			entry.Labels = map[string]string{"user": user}
+	if os.Getenv("GO_ENV") == "development" && g.options.DevelopmentLogger != nil {
+		g.options.DevelopmentLogger.Println(payload)
+	} else {
+		defer g.logger.Flush()
+		entry := logging.Entry{
+			Payload:  payload,
+			Severity: severity,
 		}
+		if request != nil {
+			httpRequest := parseRequest(request, responseMeta)
+			entry.HTTPRequest = &httpRequest
+			trace, span, traceSampled := parseTrace(request, g.projectId)
+			entry.Trace = trace
+			entry.SpanID = span
+			entry.TraceSampled = traceSampled
+			if g.options.ExtractUserFromRequest != nil {
+				user := g.options.ExtractUserFromRequest(request)
+				entry.Labels = map[string]string{"user": user}
+			}
+		}
+		g.logger.Log(entry)
 	}
-	g.logger.Log(entry)
+	
 }
 
 func (g *GcpLog) err(err error, request *http.Request) {
