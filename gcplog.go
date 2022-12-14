@@ -142,7 +142,7 @@ func (g *GcpLog) WarnRM(err error, request *http.Request, responseMeta *Response
 // ERROR
 
 func (g *GcpLog) Error(err error) {
-	go g.log(err, nil, nil, logging.Error)
+	go g.log(err.Error(), nil, nil, logging.Error)
 
 	if os.Getenv("GO_ENV") == "production" {
 		go g.err(err, nil)
@@ -150,7 +150,7 @@ func (g *GcpLog) Error(err error) {
 }
 
 func (g *GcpLog) ErrorR(err error, request *http.Request) {
-	go g.log(err, request, nil, logging.Error)
+	go g.log(err.Error(), request, nil, logging.Error)
 
 	if os.Getenv("GO_ENV") == "production" {
 		go g.err(err, request)
@@ -158,7 +158,7 @@ func (g *GcpLog) ErrorR(err error, request *http.Request) {
 }
 
 func (g *GcpLog) ErrorRM(err error, request *http.Request, responseMeta *ResponseMetadata) {
-	go g.log(err, request, responseMeta, logging.Error)
+	go g.log(err.Error(), request, responseMeta, logging.Error)
 
 	if os.Getenv("GO_ENV") == "production" {
 		go g.err(err, request)
